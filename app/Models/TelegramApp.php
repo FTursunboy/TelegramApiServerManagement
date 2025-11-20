@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class TelegramApp extends Model
 {
     protected $fillable = [
-        'tenant_id',
+        'tenant',
         'api_id',
         'api_hash',
         'status',
@@ -83,7 +83,7 @@ class TelegramApp extends Model
         $this->update(['status' => 'active']);
     }
 
-  
+
     public function getCredentials(): array
     {
         return [

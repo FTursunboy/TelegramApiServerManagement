@@ -1,59 +1,172 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Telegram API Server Management
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Microservice для управления Telegram-аккаунтами через [TelegramApiServer](https://github.com/xtrime-ru/TelegramApiServer).
 
-## About Laravel
+## Возможности
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Автоматическое создание Docker-контейнеров для каждого аккаунта
+- Поддержка User и Bot аккаунтов
+- Авторизация через phone/code/2FA или bot token
+- Отправка сообщений, голосовых, файлов
+- Webhook для получения обновлений
+- Мульти-аккаунт поддержка (каждый со своим app_id/app_hash)
+- Простой REST API
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Требования
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- PHP 8.2+
+- Laravel 12+
+- Docker (доступ к socket или TCP)
+- MySQL/SQLite
+- Composer
 
-## Learning Laravel
+## Установка
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+```bash
+# Clone repo
+git clone <repo_url>
+cd TelegramApiServerManagement
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+# Install dependencies
+composer install
 
-## Laravel Sponsors
+# Setup environment
+cp .env.example .env
+php artisan key:generate
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+# Configure .env
+# DB_CONNECTION=sqlite (or mysql)
+# DOCKER_HOST=unix:///var/run/docker.sock
+# APP_API_KEY=your_secret_api_key
+# TAS_DOCKER_IMAGE=ghcr.io/xtrime-ru/telegram-api-server:latest
+# TAS_PASSWORDS={"admin":"admin"}
 
-### Premium Partners
+# Run migrations
+php artisan migrate
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+# Pull TelegramApiServer Docker image
+php artisan tas:pull-image
 
-## Contributing
+# Install WebSocket client
+composer require textalk/websocket
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+# Start queue worker for WebSocket listeners
+php artisan queue:work --queue=websocket --timeout=0 &
 
-## Code of Conduct
+# Start server
+php artisan serve
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### Production Setup (Supervisor)
 
-## Security Vulnerabilities
+```bash
+# Автоматическая установка
+sudo ./setup-supervisor.sh
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+# Или вручную:
+sudo cp supervisor-websocket.conf /etc/supervisor/conf.d/tas-workers.conf
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start tas-websocket-worker:*
+sudo supervisorctl start tas-queue-worker:*
+
+# Проверить статус
+sudo supervisorctl status
+
+# Посмотреть логи
+tail -f storage/logs/websocket-worker.log
+tail -f storage/logs/queue-worker.log
+```
+
+## Конфигурация
+
+Основные настройки в `config/tas.php`:
+
+```php
+'docker' => [
+    'image' => 'xtrime/telegram-api-server:latest',
+    'host' => 'unix:///var/run/docker.sock',
+],
+
+'port_range' => [
+    'start' => 9510,
+    'end' => 9600,
+],
+```
+
+## Использование
+
+См. [API_USAGE.md](API_USAGE.md) для полной документации.
+
+### Быстрый старт
+
+```bash
+# 1. Start login
+curl -X POST http://localhost/api/v1/login/start \
+  -H "X-API-Key: your_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "api_id": "123456",
+    "api_hash": "your_hash",
+    "type": "user",
+    "phone": "+1234567890",
+    "webhook_url": "https://your-server.com/webhook"
+  }'
+
+# Response: {"success": true, "data": {"session_name": "session_abc123", ...}}
+
+# 2. Complete with code
+curl -X POST http://localhost/api/v1/login/complete-code \
+  -H "X-API-Key: your_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_name": "session_abc123",
+    "code": "12345"
+  }'
+
+# 3. Send message
+curl -X POST http://localhost/api/v1/send-message \
+  -H "X-API-Key: your_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_name": "session_abc123",
+    "peer": "@username",
+    "message": "Hello!"
+  }'
+```
+
+## API Endpoints
+
+- `POST /api/v1/login/start` - Начать авторизацию
+- `POST /api/v1/login/complete-code` - Завершить код
+- `POST /api/v1/login/complete-2fa` - Завершить 2FA
+- `POST /api/v1/session/status` - Статус сессии
+- `POST /api/v1/session/stop` - Остановить
+- `POST /api/v1/session/restart` - Перезапустить
+- `POST /api/v1/send-message` - Отправить сообщение
+- `POST /api/v1/send-voice` - Отправить голос
+- `POST /api/v1/send-file` - Отправить файл
+
+## Архитектура
+
+```
+Request → Controller → Service → Docker/TAS API → Response
+```
+
+- **TelegramAccountService** - основная бизнес-логика
+- **DockerService** - управление контейнерами
+- **TasApiService** - взаимодействие с TAS
+- **MessageService** - отправка сообщений
+- **PortService** - управление портами
+
+## Мульти-аккаунт
+
+Каждый аккаунт получает:
+- Собственный Docker-контейнер
+- Уникальный порт (9510-9600)
+- Персональный app_id/app_hash (через TAS API)
+- Отдельный session volume
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+MIT

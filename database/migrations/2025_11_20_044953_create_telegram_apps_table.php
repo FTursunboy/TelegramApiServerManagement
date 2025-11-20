@@ -13,11 +13,11 @@ return new class extends Migration
     {
         Schema::create('telegram_apps', function (Blueprint $table) {
             $table->id();
+            $table->string('name');
             $table->string('tenant');
             $table->string('api_id');
             $table->text('api_hash');
             $table->string('status');
-            $table->text('description')->nullable();
             $table->timestamps();
         });
     }

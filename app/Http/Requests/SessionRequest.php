@@ -5,9 +5,9 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * Request для завершения авторизации по коду из SMS/Telegram
+ * Request для операций с сессией (stop, restart, status)
  */
-class CompleteCodeRequest extends FormRequest
+class SessionRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -17,9 +17,11 @@ class CompleteCodeRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // Session identifier
             'session_name' => 'required|string',
-
-            'code' => 'required|string|min:5|max:6',
+            
+            // Optional: remove container on stop
+            'remove_container' => 'nullable|boolean',
         ];
     }
 
@@ -27,9 +29,7 @@ class CompleteCodeRequest extends FormRequest
     {
         return [
             'session_name.required' => 'Session name обязателен',
-            'code.required' => 'Код обязателен',
-            'code.min' => 'Код должен быть минимум 5 символов',
-            'code.max' => 'Код должен быть максимум 6 символов',
         ];
     }
 }
+

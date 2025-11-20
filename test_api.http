@@ -1,0 +1,118 @@
+# Test API Endpoints
+# Use with VS Code REST Client extension or similar
+
+@baseUrl = http://localhost/api/v1
+@apiKey = your_api_key_here
+@sessionName = session_test123
+
+### 1. Start Login (User)
+POST {{baseUrl}}/login/start
+X-API-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "api_id": "123456",
+  "api_hash": "your_api_hash_32_chars_minimum",
+  "type": "user",
+  "phone": "+1234567890",
+  "webhook_url": "https://your-server.com/webhook"
+}
+
+### 1b. Start Login (Bot)
+POST {{baseUrl}}/login/start
+X-API-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "api_id": "123456",
+  "api_hash": "your_api_hash_32_chars_minimum",
+  "type": "bot",
+  "bot_token": "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
+  "webhook_url": "https://your-server.com/webhook"
+}
+
+### 2. Complete Code
+POST {{baseUrl}}/login/complete-code
+X-API-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "session_name": "{{sessionName}}",
+  "code": "12345"
+}
+
+### 3. Complete 2FA
+POST {{baseUrl}}/login/complete-2fa
+X-API-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "session_name": "{{sessionName}}",
+  "password": "my2fapassword"
+}
+
+### 4. Session Status
+POST {{baseUrl}}/session/status
+X-API-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "session_name": "{{sessionName}}"
+}
+
+### 5. Send Message
+POST {{baseUrl}}/send-message
+X-API-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "session_name": "{{sessionName}}",
+  "peer": "@username",
+  "message": "Hello from API!",
+  "parse_mode": "Markdown"
+}
+
+### 6. Send Voice
+POST {{baseUrl}}/send-voice
+X-API-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "session_name": "{{sessionName}}",
+  "peer": "@username",
+  "voice_path": "/path/to/voice.ogg",
+  "caption": "Voice message"
+}
+
+### 7. Send File
+POST {{baseUrl}}/send-file
+X-API-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "session_name": "{{sessionName}}",
+  "peer": "@username",
+  "file_path": "/path/to/document.pdf",
+  "caption": "Document",
+  "parse_mode": "Markdown"
+}
+
+### 8. Stop Session
+POST {{baseUrl}}/session/stop
+X-API-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "session_name": "{{sessionName}}",
+  "remove_container": true
+}
+
+### 9. Restart Session
+POST {{baseUrl}}/session/restart
+X-API-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "session_name": "{{sessionName}}"
+}
+
