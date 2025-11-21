@@ -53,7 +53,19 @@ class TasApiService
 
             // Проверить на ошибки в ответе TAS
             if (isset($data['success']) && $data['success'] === false) {
-                $error = $data['errors'][0] ?? 'Unknown error';
+                $error = $data['errors'][0] ?? [];
+                $errorMessage = $error['message'] ?? 'Unknown error';
+                
+                if (str_contains($errorMessage, 'FLOOD_WAIT')) {
+                    preg_match('/FLOOD_WAIT_(\d+)/', $errorMessage, $matches);
+                    $waitSeconds = $matches[1] ?? 0;
+                    $waitHours = round($waitSeconds / 3600, 1);
+                    
+                    throw new TasApiException(
+                        "Telegram FLOOD_WAIT: Too many requests. Please wait {$waitHours} hours ({$waitSeconds} seconds) before trying again."
+                    );
+                }
+                
                 throw new TasApiException("TAS returned error: " . json_encode($error));
             }
 

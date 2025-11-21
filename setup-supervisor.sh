@@ -31,8 +31,8 @@ supervisorctl update
 
 # Запустить workers
 echo "▶️  Starting workers..."
-supervisorctl start tas-websocket-worker:*
-supervisorctl start tas-queue-worker:*
+supervisorctl start tas-websocket-manager 2>/dev/null || true
+supervisorctl start tas-queue-worker:* 2>/dev/null || true
 
 echo ""
 echo "✅ Done! Check status:"
@@ -41,4 +41,5 @@ echo ""
 echo "📊 View logs:"
 echo "   tail -f /var/www/TelegramApiServerManagement/storage/logs/websocket-worker.log"
 echo "   tail -f /var/www/TelegramApiServerManagement/storage/logs/queue-worker.log"
+
 

@@ -6,7 +6,6 @@ use App\Models\TelegramAccount;
 use App\Enums\AccountStatus;
 use App\Enums\AccountType;
 use App\Models\TelegramApp;
-use App\Jobs\ListenToWebSocket;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -43,9 +42,7 @@ class TelegramAccountService
 
                 $this->configureSession($account);
 
-                ListenToWebSocket::dispatch($account->id);
-
-                return $this->initiateAuth($account);
+                return  $this->initiateAuth($account);
 
             } catch (\Exception $e) {
                 Log::error('Start login failed', [
@@ -83,6 +80,7 @@ class TelegramAccountService
                 return [
                     'status' => AccountStatus::WAITING_2FA->value,
                     'needs_2fa' => true,
+                    'session_name' => $account->session_name,
                     'error' => null,
                 ];
             }
@@ -95,6 +93,7 @@ class TelegramAccountService
             return [
                 'status' => AccountStatus::READY->value,
                 'needs_2fa' => false,
+                'session_name' => $account->session_name,
                 'user_data' => [
                     'id' => $userData['id'] ?? null,
                     'username' => $userData['username'] ?? null,
@@ -136,6 +135,7 @@ class TelegramAccountService
 
             return [
                 'status' => AccountStatus::READY->value,
+                'session_name' => $account->session_name,
                 'user_data' => [
                     'id' => $userData['id'] ?? null,
                     'username' => $userData['username'] ?? null,
@@ -303,6 +303,7 @@ class TelegramAccountService
                 'status' => AccountStatus::WAITING_CODE->value,
                 'needs_code' => true,
                 'needs_2fa' => false,
+                'session_name' => $account->session_name,
                 'container' => [
                     'name' => $account->container_name,
                     'port' => $account->container_port,
@@ -327,6 +328,7 @@ class TelegramAccountService
                 'status' => AccountStatus::READY->value,
                 'needs_code' => false,
                 'needs_2fa' => false,
+                'session_name' => $account->session_name,
                 'bot_data' => [
                     'id' => $botData['id'] ?? null,
                     'username' => $botData['username'] ?? null,
@@ -341,4 +343,5 @@ class TelegramAccountService
             ];
         }
     }
+
 }
