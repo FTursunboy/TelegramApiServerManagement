@@ -26,10 +26,6 @@ class WebSocketService
 
         $message = $update['message'] ?? [];
 
-        if ($message['out'] ?? false) {
-            return false;
-        }
-
         $fromId = $this->extractUserId($message['from_id'] ?? null);
         $peerId = $this->extractUserId($message['peer_id'] ?? null);
 
@@ -80,19 +76,13 @@ class WebSocketService
 
         return [
             'session' => $sessionName,
-            'update_type' => $update['_'] ?? null,
             'message_id' => $message['id'] ?? null,
             'from_id' => $message['from_id'] ?? null,
             'peer_id' => $message['peer_id'] ?? null,
             'message' => $message['message'] ?? null,
             'date' => $message['date'] ?? null,
             'out' => $message['out'] ?? false,
-            'mentioned' => $message['mentioned'] ?? false,
-            'media_unread' => $message['media_unread'] ?? false,
-            'silent' => $message['silent'] ?? false,
-            'pts' => $update['pts'] ?? null,
-            'pts_count' => $update['pts_count'] ?? null,
-            'raw' => $update
+            'mentioned' => $message['mentioned'] ?? false
         ];
     }
 

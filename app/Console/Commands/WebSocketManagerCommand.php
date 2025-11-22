@@ -61,6 +61,7 @@ class WebSocketManagerCommand extends Command
             $accountId = (int) str_replace('account_', '', $key);
             if (!$activeAccounts->contains('id', $accountId)) {
                 unset($this->connections[$key]);
+                unset($this->connectionIds[$key]);
                 $this->info("Removed connection for account {$accountId}");
             }
         }
@@ -71,9 +72,13 @@ class WebSocketManagerCommand extends Command
         $key = "account_{$account->id}";
         $wsUrl = $ws->getWebSocketUrl($account);
 
-        $this->connections[$key] = true;
+        // Generate unique connection ID
+        $connectionId = uniqid('conn_', true);
 
-        async(function () use ($account, $ws, $wsUrl, $key) {
+        $this->connections[$key] = true;
+        $this->connectionIds[$key] = $connectionId;
+
+        async(function () use ($account, $ws, $wsUrl, $key, $connectionId) {
             $reconnectDelay = 1;
             $maxReconnectDelay = 60;
 
@@ -86,6 +91,7 @@ class WebSocketManagerCommand extends Command
                     Log::info('WebSocket connected', [
                         'session_name' => $account->session_name,
                         'ws_url' => $wsUrl,
+                        'connection_id' => $connectionId,
                     ]);
 
                     $reconnectDelay = 1;
@@ -98,6 +104,12 @@ class WebSocketManagerCommand extends Command
                         }
 
                         if (!isset($this->connections[$key])) {
+                            $connection->close();
+                            return;
+                        }
+
+                        if (!isset($this->connectionIds[$key]) || $this->connectionIds[$key] !== $connectionId) {
+                            $this->info("Connection ID mismatch for {$account->session_name}, stopping old fiber");
                             $connection->close();
                             return;
                         }
@@ -144,6 +156,7 @@ class WebSocketManagerCommand extends Command
         $this->info("Started listener for: {$account->session_name}");
         Log::info('Started WebSocket listener', [
             'session_name' => $account->session_name,
+            'connection_id' => $connectionId,
         ]);
     }
 }
