@@ -90,6 +90,9 @@ class TelegramAccountService
 
             $account->markAuthorized($userData);
 
+            // Signal WebSocket Manager to reconnect
+            \Illuminate\Support\Facades\Cache::put("reconnect_ws_{$account->id}", true, 10);
+
             return [
                 'status' => AccountStatus::READY->value,
                 'needs_2fa' => false,
@@ -132,6 +135,9 @@ class TelegramAccountService
             $userData = $selfInfo['response'] ?? [];
 
             $account->markAuthorized($userData);
+
+            // Signal WebSocket Manager to reconnect
+            \Illuminate\Support\Facades\Cache::put("reconnect_ws_{$account->id}", true, 10);
 
             return [
                 'status' => AccountStatus::READY->value,

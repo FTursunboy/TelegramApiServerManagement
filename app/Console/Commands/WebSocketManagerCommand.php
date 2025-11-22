@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\TelegramAccount;
 use App\Services\WebSocketService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Amp\Websocket\Client\WebsocketHandshake;
 use Revolt\EventLoop;
@@ -19,6 +20,7 @@ class WebSocketManagerCommand extends Command
     protected $description = 'Manage WebSocket connections for all Telegram accounts';
 
     private array $connections = [];
+    private array $connectionIds = []; // Store unique ID for each connection
 
     public function handle(WebSocketService $ws): int
     {
@@ -43,6 +45,12 @@ class WebSocketManagerCommand extends Command
 
         foreach ($activeAccounts as $account) {
             $key = "account_{$account->id}";
+
+            if (Cache::pull("reconnect_ws_{$account->id}")) {
+                $this->info("Reconnect signal received for account {$account->id}");
+                unset($this->connections[$key]);
+                unset($this->connectionIds[$key]);
+            }
 
             if (!isset($this->connections[$key])) {
                 $this->startListening($account, $ws);
@@ -83,6 +91,12 @@ class WebSocketManagerCommand extends Command
                     $reconnectDelay = 1;
 
                     while ($message = $connection->receive()) {
+                        if (Cache::has("reconnect_ws_{$account->id}")) {
+                            $this->info("Reconnecting WebSocket for {$account->session_name}");
+                            $connection->close();
+                            break;
+                        }
+
                         if (!isset($this->connections[$key])) {
                             $connection->close();
                             return;
