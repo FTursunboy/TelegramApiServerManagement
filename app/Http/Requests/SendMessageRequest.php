@@ -20,8 +20,6 @@ class SendMessageRequest extends FormRequest
             'session_name' => 'required|string',
             'peer' => 'required|string',
             'message' => 'required|string|max:4096',
-
-            // Parse mode (Markdown or HTML)
             'parse_mode' => 'nullable|in:Markdown,HTML',
         ];
     }

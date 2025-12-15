@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\AccountStatus;
 use App\Enums\AccountType;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 
 class TelegramAccount extends Model
 {
@@ -34,6 +35,46 @@ class TelegramAccount extends Model
         'type' => AccountType::class,
         'container_port' => 'integer',
     ];
+
+    /**
+     * Model events - invalidate WebSocket V2 cache on changes
+     */
+    protected static function booted(): void
+    {
+        // Invalidate cache only when fields affecting WebSocket connections change
+        static::saved(function (TelegramAccount $account) {
+            // Check if important fields changed
+            $importantFields = [
+                'status',
+                'container_name',
+                'container_port',
+                'container_id',
+            ];
+
+            $shouldInvalidate = false;
+
+            // Check if any important field was changed
+            foreach ($importantFields as $field) {
+                if ($account->wasChanged($field)) {
+                    $shouldInvalidate = true;
+                    break;
+                }
+            }
+
+            // Also invalidate on creation
+            if ($account->wasRecentlyCreated) {
+                $shouldInvalidate = true;
+            }
+
+            if ($shouldInvalidate) {
+                Cache::forget('ws_v2_active_accounts');
+            }
+        });
+
+        static::deleted(function () {
+            Cache::forget('ws_v2_active_accounts');
+        });
+    }
 
     // Relations
     public function telegramApp()

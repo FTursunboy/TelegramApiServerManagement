@@ -20,7 +20,7 @@ class WebSocketManagerCommand extends Command
     protected $description = 'Manage WebSocket connections for all Telegram accounts';
 
     private array $connections = [];
-    private array $connectionIds = []; // Store unique ID for each connection
+    private array $connectionIds = [];
 
     public function handle(WebSocketService $ws): int
     {

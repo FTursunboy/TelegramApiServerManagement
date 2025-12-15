@@ -167,6 +167,52 @@ Request → Controller → Service → Docker/TAS API → Response
 - Персональный app_id/app_hash (через TAS API)
 - Отдельный session volume
 
+## 🚀 WebSocket Manager V2 (Recommended)
+
+**Новая улучшенная версия** с исправлением всех критических проблем!
+
+### Основные улучшения:
+- ✅ Исправлены утечки памяти
+- ✅ Асинхронная отправка webhook'ов
+- ✅ Правильное управление fiber'ами (нет zombie fibers)
+- ✅ Graceful shutdown по SIGTERM
+- ✅ Ping/pong keep-alive
+- ✅ Метрики и мониторинг
+- ✅ Backpressure контроль
+
+### Быстрый старт:
+
+```bash
+# Установка V2
+sudo ./setup-websocket-v2.sh
+
+# Или вручную
+composer require amphp/http-client
+sudo cp supervisor-websocket-v2.conf /etc/supervisor/conf.d/tas-workers-v2.conf
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start tas-websocket-manager-v2
+```
+
+### Документация:
+Полная документация: [WEBSOCKET_V2.md](WEBSOCKET_V2.md)
+
+### Мониторинг:
+```bash
+# Логи
+tail -f storage/logs/websocket-v2.log
+
+# Статус
+sudo supervisorctl status
+
+# Debug режим
+php artisan websocket:manager-v2 --debug
+```
+
+**Рекомендуется использовать V2 для production!**
+
+---
+
 ## License
 
 MIT

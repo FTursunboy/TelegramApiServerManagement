@@ -23,8 +23,8 @@ class SendVoiceRequest extends FormRequest
             // Recipient (username, phone, or ID)
             'peer' => 'required|string',
             
-            // Voice file path or URL
-            'voice_path' => 'required|string',
+            // Voice file URL
+            'voice_url' => 'required|string|url',
             
             // Optional caption
             'caption' => 'nullable|string|max:1024',
@@ -36,11 +36,13 @@ class SendVoiceRequest extends FormRequest
         return [
             'session_name.required' => 'Session name обязателен',
             'peer.required' => 'Получатель обязателен',
-            'voice_path.required' => 'Путь к голосовому файлу обязателен',
+            'voice_url.required' => 'URL голосового файла обязателен',
+            'voice_url.url' => 'Некорректный URL',
             'caption.max' => 'Подпись слишком длинная (макс. 1024 символа)',
         ];
     }
 }
+
 
 
 

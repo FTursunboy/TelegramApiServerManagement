@@ -3,7 +3,6 @@
 use App\Http\Controllers\API\TelegramAccountController;
 use Illuminate\Support\Facades\Route;
 
-// Simple microservice API - only essential endpoints
 Route::prefix('v1')->middleware('api.key')->group(function () {
 
     Route::post('login/start', [TelegramAccountController::class, 'startLogin']);

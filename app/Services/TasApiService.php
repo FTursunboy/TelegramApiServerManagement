@@ -20,11 +20,6 @@ class TasApiService
         $url = "http://127.0.0.1:{$port}{$endpoint}";
 
         try {
-            Log::debug('TAS API request', [
-                'url' => $url,
-                'method' => $method,
-                'params' => $params,
-            ]);
 
             $request = Http::timeout(30)
                 ->withBasicAuth(
@@ -39,6 +34,7 @@ class TasApiService
             }
 
             if (!$response->successful()) {
+                dd($response->body());
                 throw new TasApiException(
                     "TAS API error [{$response->status()}]: {$response->body()}"
                 );
@@ -82,7 +78,7 @@ class TasApiService
     }
 
     /**
-     * Сохранить настройки сессии (app_id, app_hash)
+     * Сохранить настройки сессии (api_id, api_hash)
      */
     public function saveSessionSettings(
         int $port,
@@ -92,8 +88,8 @@ class TasApiService
     ): void {
         $this->request($port, '/system/saveSessionSettings', [
             'session' => $session,
-            'settings[app_info][app_id]' => $apiId,
-            'settings[app_info][app_hash]' => $apiHash,
+            'settings[app_info][api_id]' => $apiId,
+            'settings[app_info][api_hash]' => $apiHash,
         ]);
 
 
@@ -231,15 +227,16 @@ class TasApiService
     public function sendPhoto(
         int $port,
         string $peer,
-        string $photoPath,
+        string $photoUrl,
         ?string $caption = null,
         ?string $parseMode = null
     ): array {
+        // Format file as RemoteUrl object per TAS documentation
         $params = [
             'peer' => $peer,
             'file' => [
-                '_' => 'LocalUrl',
-                'file' => $photoPath,
+                '_' => 'RemoteUrl',
+                'url' => $photoUrl,
             ],
         ];
 
@@ -284,7 +281,7 @@ class TasApiService
     public function sendVoice(
         int $port,
         string $peer,
-        string $voicePath,
+        string $voiceUrl,
         ?string $caption = null,
         ?string $sessionName = null
     ): array {
@@ -292,11 +289,12 @@ class TasApiService
             ? "/api/{$sessionName}/sendVoice"
             : "/api/sendVoice";
 
+        // Format file as RemoteUrl object per TAS documentation
         $params = [
             'peer' => $peer,
             'file' => [
-                '_' => 'LocalUrl',
-                'file' => $voicePath,
+                '_' => 'RemoteUrl',
+                'url' => $voiceUrl,
             ],
         ];
 
@@ -321,7 +319,7 @@ class TasApiService
     public function sendDocument(
         int $port,
         string $peer,
-        string $filePath,
+        string $fileUrl,
         ?string $caption = null,
         ?string $parseMode = null,
         ?string $sessionName = null
@@ -330,29 +328,23 @@ class TasApiService
             ? "/api/{$sessionName}/sendDocument"
             : "/api/sendDocument";
 
+        // Format file as RemoteUrl object per TAS documentation
         $params = [
             'peer' => $peer,
             'file' => [
-                '_' => 'LocalUrl',
-                'file' => $filePath,
+                '_' => 'RemoteUrl',
+                'url' => $fileUrl,
             ],
         ];
 
         if ($caption) {
             $params['caption'] = $caption;
         }
-
         if ($parseMode) {
             $params['parseMode'] = $parseMode;
         }
 
         $response = $this->request($port, $endpoint, $params, 'POST');
-
-        Log::info('Document sent', [
-            'port' => $port,
-            'peer' => $peer,
-            'message_id' => $response['response']['id'] ?? null,
-        ]);
 
         return $response;
     }

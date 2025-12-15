@@ -37,7 +37,6 @@ class MessageService
                 sessionName: $account->session_name
             );
 
-            // Обновить статистику
             $account->incrementMessageCount();
 
             return [
@@ -81,7 +80,7 @@ class MessageService
         $response = $this->tas->sendPhoto(
             port: $account->container_port,
             peer: $peer,
-            photoPath: $photoPath,
+            photoUrl: $photoPath,
             caption: $caption
         );
 
@@ -142,7 +141,7 @@ class MessageService
     public function sendVoice(
         TelegramAccount $account,
         string $peer,
-        string $voicePath,
+        string $voiceUrl,
         ?string $caption = null
     ): array {
         if (!$account->isReady()) {
@@ -156,14 +155,14 @@ class MessageService
         Log::info('Sending voice via TAS', [
             'account_id' => $account->id,
             'peer' => $peer,
-            'voice_path' => $voicePath,
+            'voice_url' => $voiceUrl,
         ]);
 
         try {
             $response = $this->tas->sendVoice(
                 port: $account->container_port,
                 peer: $peer,
-                voicePath: $voicePath,
+                voiceUrl: $voiceUrl,
                 caption: $caption,
                 sessionName: $account->session_name
             );
@@ -186,13 +185,11 @@ class MessageService
         }
     }
 
-    /**
-     * Отправить файл/документ
-     */
+
     public function sendFile(
         TelegramAccount $account,
         string $peer,
-        string $filePath,
+        string $fileUrl,
         ?string $caption = null,
         ?string $parseMode = null
     ): array {
@@ -204,17 +201,12 @@ class MessageService
             throw new \InvalidArgumentException("Account #{$account->id} has no active container");
         }
 
-        Log::info('Sending file via TAS', [
-            'account_id' => $account->id,
-            'peer' => $peer,
-            'file_path' => $filePath,
-        ]);
 
         try {
             $response = $this->tas->sendDocument(
                 port: $account->container_port,
                 peer: $peer,
-                filePath: $filePath,
+                fileUrl: $fileUrl,
                 caption: $caption,
                 parseMode: $parseMode,
                 sessionName: $account->session_name

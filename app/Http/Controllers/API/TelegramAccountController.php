@@ -25,6 +25,7 @@ class TelegramAccountController extends Controller
 
     public function startLogin(StartLoginRequest $request): JsonResponse
     {
+        Log::error("132");
         try {
             $result = $this->accountService->startLogin($request->validated());
 
@@ -230,7 +231,7 @@ class TelegramAccountController extends Controller
             $result = $this->messageService->sendVoice(
                 account: $account,
                 peer: $request->peer,
-                voicePath: $request->voice_path,
+                voiceUrl: $request->voice_url,
                 caption: $request->caption
             );
 
@@ -263,7 +264,7 @@ class TelegramAccountController extends Controller
             $result = $this->messageService->sendFile(
                 account: $account,
                 peer: $request->peer,
-                filePath: $request->file_path,
+                fileUrl: $request->file_url,
                 caption: $request->caption,
                 parseMode: $request->parse_mode
             );
