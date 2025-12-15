@@ -30,7 +30,6 @@ class StartLoginRequest extends FormRequest
 
             'force_recreate' => 'nullable|boolean',
 
-            'session_name' => 'nullable|string',
         ];
     }
 

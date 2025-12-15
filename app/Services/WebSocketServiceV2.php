@@ -16,6 +16,10 @@ class WebSocketServiceV2
     private const WEBHOOK_TIMEOUT = 5;
     private const WEBHOOK_RETRY_ATTEMPTS = 2;
 
+    public function __construct(public TasApiService $tasApiService)
+    {
+    }
+
     public function getWebSocketUrl(TelegramAccount $account): string
     {
         return "ws://127.0.0.1:{$account->container_port}/events/{$account->session_name}";
@@ -33,7 +37,7 @@ class WebSocketServiceV2
         if (($update['_'] ?? null) !== 'updateNewMessage') {
             return false;
         }
-
+        Log::error(json_encode($update));
         $message = $update['message'] ?? [];
 
         $fromId = $this->extractUserId($message['from_id'] ?? null);
@@ -85,7 +89,9 @@ class WebSocketServiceV2
         $message = $update['message'] ?? [];
         $sessionName = $data['result']['session'] ?? null;
 
-        return [
+        $port = TelegramAccount::query()->where('session_name', $sessionName)->first()->container_port;
+
+        $result = [
             'session' => $sessionName,
             'message_id' => $message['id'] ?? null,
             'from_id' => $message['from_id'] ?? null,
@@ -98,6 +104,25 @@ class WebSocketServiceV2
             'reply_to' => $message['reply_to'] ?? null,
             'entities' => $message['entities'] ?? null,
         ];
+
+        if ($message['out']) {
+            $chat = $this->tasApiService->getInfo($port, $message['peer_id']);
+
+            $result['chat']['first_name'] = $chat['response']['User']['first_name'];
+            $result['chat']['username'] = $chat['response']['User']['username'];
+            $result['chat']['id'] = $chat['response']['User']['id'];
+            $result['chat']['phone_number'] = $chat['response']['User']['phone'] ?? null;
+        }
+        if (!$message['out']) {
+            $chat = $this->tasApiService->getInfo($port, $message['from_id']);
+
+            $result['chat']['first_name'] = $chat['response']['User']['first_name'];
+            $result['chat']['username'] = $chat['response']['User']['username'];
+            $result['chat']['id'] = $chat['response']['User']['id'];
+            $result['chat']['phone_number'] = $chat['response']['User']['phone'] ?? null;
+        }
+
+        return $result;
     }
 
     private function extractMediaInfo(array $media): array
