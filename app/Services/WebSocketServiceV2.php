@@ -147,32 +147,29 @@ class WebSocketServiceV2
             'has_voice' => isset($media['voice']),
         ];
 
+        // ИЗМЕНЕНИЕ: Сохраняем данные на верхнем уровне для удобного доступа
         if (isset($media['photo'])) {
             $photo = $media['photo'];
-            $info['photo'] = [
-                'id' => $photo['id'] ?? null,
-                'access_hash' => $photo['access_hash'] ?? null,
-                'file_reference' => $photo['file_reference']['bytes'] ?? null,
-                'sizes' => $photo['sizes'] ?? [],
-                'dc_id' => $photo['dc_id'] ?? null,
-            ];
+            $info['photo_id'] = $photo['id'] ?? null;
+            $info['access_hash'] = $photo['access_hash'] ?? null;
+            $info['file_reference'] = $photo['file_reference']['bytes'] ?? null;
+            $info['sizes'] = $photo['sizes'] ?? [];
+            $info['dc_id'] = $photo['dc_id'] ?? null;
         }
 
         if (isset($media['document'])) {
             $doc = $media['document'];
-            $info['document'] = [
-                'id' => $doc['id'] ?? null,
-                'access_hash' => $doc['access_hash'] ?? null,
-                'file_reference' => $doc['file_reference']['bytes'] ?? null,
-                'mime_type' => $doc['mime_type'] ?? null,
-                'size' => $doc['size'] ?? null,
-                'dc_id' => $doc['dc_id'] ?? null,
-            ];
+            $info['document_id'] = $doc['id'] ?? null;
+            $info['access_hash'] = $doc['access_hash'] ?? null;
+            $info['file_reference'] = $doc['file_reference']['bytes'] ?? null;
+            $info['mime_type'] = $doc['mime_type'] ?? null;
+            $info['size'] = $doc['size'] ?? null;
+            $info['dc_id'] = $doc['dc_id'] ?? null;
 
             if (isset($doc['attributes'])) {
                 foreach ($doc['attributes'] as $attr) {
                     if (($attr['_'] ?? '') === 'documentAttributeFilename') {
-                        $info['document']['file_name'] = $attr['file_name'] ?? null;
+                        $info['file_name'] = $attr['file_name'] ?? null;
                     }
                 }
             }
@@ -196,118 +193,223 @@ class WebSocketServiceV2
                 return;
             }
 
-            $fileUrl = $this->buildFileUrl($media, $port);
+            // ИЗМЕНЕНИЕ: buildFileUrl теперь возвращает содержимое файла напрямую
+            $fileContent = $this->buildFileUrl($media, $port);
 
-            if (!$fileUrl) {
-                Log::warning('Could not build file URL', ['media' => $media]);
-                return;
-            }
-
-            // Скачиваем файл
-            $response = Http::timeout(30)->get($fileUrl);
-
-            if (!$response->successful()) {
-                Log::error('Failed to download file', ['url' => $fileUrl, 'status' => $response->status()]);
+            if (!$fileContent) {
+                Log::warning('Could not download file from TAS', ['media' => $media]);
                 return;
             }
 
             // Добавляем файл в messageData
             $fileName = $this->generateFileName($media);
-            $messageData['file_content'] = $response->body();
+            $messageData['file_content'] = $fileContent;
             $messageData['file_name'] = $fileName;
 
-            Log::info('Media downloaded', ['file_name' => $fileName, 'size' => strlen($response->body())]);
+            Log::info('Media downloaded from TAS', [
+                'file_name' => $fileName,
+                'size' => strlen($fileContent)
+            ]);
 
         } catch (\Throwable $e) {
-            Log::error('Error downloading media', [
+            Log::error('Error downloading media from TAS', [
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
                 'session' => $messageData['session'] ?? 'unknown'
             ]);
         }
     }
-
     private function buildFileUrl(array $media, int $port): ?string
     {
-        $baseUrl = "http://127.0.0.1:{$port}";
-
         // Для фото
         if (isset($media['photo_id'])) {
-            // Выбираем самый большой размер
-            $sizes = $media['sizes'] ?? [];
-            $largestSize = null;
-            $maxSize = 0;
+            $mediaObject = [
+                '_' => 'messageMediaPhoto',
+                'photo' => [
+                    '_' => 'photo',
+                    'id' => $media['photo_id'],
+                    'access_hash' => $media['access_hash'],
+                    'file_reference' => [
+                        '_' => 'bytes',
+                        'bytes' => $media['file_reference']
+                    ],
+                    'sizes' => $media['sizes'],
+                    'dc_id' => $media['dc_id'] ?? 2
+                ]
+            ];
 
-            foreach ($sizes as $size) {
-                if (in_array($size['_'] ?? '', ['photoSize', 'photoSizeProgressive'])) {
-                    $currentSize = ($size['w'] ?? 0) * ($size['h'] ?? 0);
-                    if ($currentSize > $maxSize) {
-                        $maxSize = $currentSize;
-                        $largestSize = $size;
-                    }
-                }
-            }
-
-            if (!$largestSize) {
-                return null;
-            }
-
-            $params = http_build_query([
-                'file_id' => $media['photo_id'],
-                'access_hash' => $media['access_hash'],
-                'file_reference' => base64_encode($media['file_reference']),
-                'size_type' => $largestSize['type'],
-                'dc_id' => $media['dc_id'] ?? 2
-            ]);
-
-            return "{$baseUrl}/file?{$params}";
+            return $this->downloadFromTas($port, $mediaObject);
         }
 
         // Для документа
         if (isset($media['document_id'])) {
-            $params = http_build_query([
-                'file_id' => $media['document_id'],
-                'access_hash' => $media['access_hash'],
-                'file_reference' => base64_encode($media['file_reference']),
-                'dc_id' => $media['dc_id'] ?? 2
-            ]);
+            // Формируем attributes
+            $attributes = [];
 
-            return "{$baseUrl}/file?{$params}";
+            // Добавляем имя файла если есть
+            if (isset($media['file_name'])) {
+                $attributes[] = [
+                    '_' => 'documentAttributeFilename',
+                    'file_name' => $media['file_name']
+                ];
+            }
+
+            // Для голосовых сообщений
+            if ($media['mime_type'] === 'audio/ogg' || strpos($media['type'], 'voice') !== false) {
+                $attributes[] = [
+                    '_' => 'documentAttributeAudio',
+                    'voice' => true,
+                    'duration' => 0,
+                    'waveform' => null
+                ];
+            }
+
+            // Для видео
+            if (strpos($media['mime_type'] ?? '', 'video') !== false) {
+                $attributes[] = [
+                    '_' => 'documentAttributeVideo',
+                    'round_message' => false,
+                    'supports_streaming' => true,
+                    'duration' => 0,
+                    'w' => 0,
+                    'h' => 0
+                ];
+            }
+
+            // Если нет атрибутов, добавляем хотя бы имя файла
+            if (empty($attributes)) {
+                $attributes[] = [
+                    '_' => 'documentAttributeFilename',
+                    'file_name' => $media['file_name'] ?? 'file'
+                ];
+            }
+
+            $mediaObject = [
+                '_' => 'messageMediaDocument',
+                'document' => [
+                    '_' => 'document',
+                    'id' => $media['document_id'],
+                    'access_hash' => $media['access_hash'],
+                    'file_reference' => [
+                        '_' => 'bytes',
+                        'bytes' => $media['file_reference']
+                    ],
+                    'mime_type' => $media['mime_type'] ?? 'application/octet-stream',
+                    'size' => $media['size'] ?? 0,
+                    'dc_id' => $media['dc_id'] ?? 2,
+                    'attributes' => $attributes,
+                    'date' => time()
+                ]
+            ];
+
+            return $this->downloadFromTas($port, $mediaObject);
         }
 
         return null;
     }
+    private function downloadFromTas(int $port, array $mediaObject): ?string
+    {
+        try {
+            // Используем TAS API для скачивания
+            $url = "http://127.0.0.1:{$port}/api/downloadToResponse";
 
+            $response = Http::timeout(60)
+                ->withBasicAuth(
+                    config('tas.api.username'),
+                    config('tas.api.password')
+                )
+                ->post($url, ['media' => $mediaObject]);
+
+            if (!$response->successful()) {
+                Log::error('TAS download failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                    'media_type' => $mediaObject['_']
+                ]);
+                return null;
+            }
+
+            // Возвращаем содержимое файла напрямую
+            return $response->body();
+
+        } catch (\Throwable $e) {
+            Log::error('TAS download exception', [
+                'error' => $e->getMessage(),
+                'media_type' => $mediaObject['_']
+            ]);
+            return null;
+        }
+    }
     private function generateFileName(array $media): string
     {
-        // Для документа берем оригинальное имя
         if (isset($media['file_name'])) {
             return $media['file_name'];
         }
 
-        // Для фото
         if (isset($media['photo_id'])) {
             return 'photo_' . time() . '_' . uniqid() . '.jpg';
         }
 
+        if (isset($media['document_id'])) {
+            $ext = 'bin';
+            if (isset($media['mime_type'])) {
+                $mimeMap = [
+                    'image/jpeg' => 'jpg',
+                    'image/png' => 'png',
+                    'video/mp4' => 'mp4',
+                    'audio/ogg' => 'ogg',
+                    'application/pdf' => 'pdf',
+                ];
+                $ext = $mimeMap[$media['mime_type']] ?? 'bin';
+            }
+            return 'document_' . time() . '_' . uniqid() . '.' . $ext;
+        }
+
         return 'file_' . time() . '_' . uniqid() . '.bin';
     }
-
 
     public function sendToWebhook(string $webhookUrl, array $data): void
     {
         try {
             $client = HttpClientBuilder::buildDefault();
 
-            $request = new Request($webhookUrl, 'POST');
-            $request->setBody(json_encode($data));
-            $request->setHeader('Content-Type', 'application/json');
+            if (isset($data['file_content'])) {
+                $fileContent = $data['file_content'];
+                $fileName = $data['file_name'];
+                unset($data['file_content'], $data['file_name']);
+
+                $boundary = '----WebKitFormBoundary' . uniqid();
+                $body = '';
+
+                foreach ($data as $key => $value) {
+                    $body .= "--{$boundary}\r\n";
+                    $body .= "Content-Disposition: form-data; name=\"{$key}\"\r\n\r\n";
+                    $body .= is_array($value) ? json_encode($value) : $value;
+                    $body .= "\r\n";
+                }
+
+                $body .= "--{$boundary}\r\n";
+                $body .= "Content-Disposition: form-data; name=\"file\"; filename=\"{$fileName}\"\r\n";
+                $body .= "Content-Type: application/octet-stream\r\n\r\n";
+                $body .= $fileContent;
+                $body .= "\r\n";
+                $body .= "--{$boundary}--\r\n";
+
+                $request = new Request($webhookUrl, 'POST');
+                $request->setBody($body);
+                $request->setHeader('Content-Type', "multipart/form-data; boundary={$boundary}");
+            } else {
+                $request = new Request($webhookUrl, 'POST');
+                $request->setBody(json_encode($data));
+                $request->setHeader('Content-Type', 'application/json');
+            }
+
             $request->setInactivityTimeout(self::WEBHOOK_TIMEOUT * 1000);
             $request->setTcpConnectTimeout(self::WEBHOOK_TIMEOUT * 1000);
             $request->setTlsHandshakeTimeout(self::WEBHOOK_TIMEOUT * 1000);
             $request->setTransferTimeout(self::WEBHOOK_TIMEOUT * 1000);
 
             $response = $client->request($request);
-
             $statusCode = $response->getStatus();
 
             if ($statusCode >= 200 && $statusCode < 300) {

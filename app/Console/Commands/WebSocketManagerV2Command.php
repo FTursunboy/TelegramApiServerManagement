@@ -354,7 +354,6 @@ class WebSocketManagerV2Command extends Command
 
         $pending = $this->connections[$key]['pending_webhooks'] ?? 0;
         if ($pending >= self::BACKPRESSURE_LIMIT) {
-
             return;
         }
 
@@ -362,6 +361,8 @@ class WebSocketManagerV2Command extends Command
 
         async(function () use ($key, $webhookUrl, $messageData, $ws) {
             try {
+                $ws->downloadAndAttachMedia($messageData);
+
                 $ws->sendToWebhook($webhookUrl, $messageData);
                 $this->totalWebhooksSent++;
             } catch (\Throwable $e) {
@@ -374,7 +375,6 @@ class WebSocketManagerV2Command extends Command
             }
         })->ignore();
     }
-
     /**
      * Stop a connection
      */
