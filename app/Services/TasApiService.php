@@ -221,35 +221,6 @@ class TasApiService
         return $response;
     }
 
-
-    public function sendPhoto(
-        int $port,
-        string $peer,
-        string $photoUrl,
-        ?string $caption = null,
-        ?string $parseMode = null
-    ): array {
-        // Format file as RemoteUrl object per TAS documentation
-        $params = [
-            'peer' => $peer,
-            'file' => [
-                '_' => 'RemoteUrl',
-                'url' => $photoUrl,
-            ],
-        ];
-
-        if ($caption) {
-            $params['caption'] = $caption;
-        }
-
-        if ($parseMode) {
-            $params['parseMode'] = $parseMode;
-        }
-
-        return $this->request($port, '/api/sendPhoto', $params, 'POST');
-    }
-
-
     public function getHistory(
         int $port,
         string $peer,
@@ -272,32 +243,68 @@ class TasApiService
             'id' => $id,
         ]);
     }
+    
+    public function sendDocument(
+        int $port,
+        string $peer,
+        string $fileUrl,
+        ?string $caption = null,
+        ?string $parseMode = null,
+        ?string $sessionName = null
+    ): array {
+        $endpoint = $sessionName
+            ? "/api/{$sessionName}/sendDocument"
+            : "/api/sendDocument";
 
-    /**
-     * Отправить голосовое сообщение
-     */
+        // Просто передаем URL как строку
+        $params = [
+            'peer' => $peer,
+            'file' => $fileUrl,
+        ];
+
+        if ($caption) {
+            $params['caption'] = $caption;
+        }
+
+        if ($parseMode) {
+            $params['parse_mode'] = $parseMode;
+        }
+
+        $response = $this->request($port, $endpoint, $params, 'POST');
+
+        Log::info('Document sent', [
+            'port' => $port,
+            'peer' => $peer,
+            'file_url' => $fileUrl,
+            'message_id' => $response['response']['id'] ?? null,
+        ]);
+
+        return $response;
+    }
+
     public function sendVoice(
         int $port,
         string $peer,
         string $voiceUrl,
         ?string $caption = null,
+        ?string $parseMode = null,
         ?string $sessionName = null
     ): array {
         $endpoint = $sessionName
             ? "/api/{$sessionName}/sendVoice"
             : "/api/sendVoice";
 
-        // Format file as RemoteUrl object per TAS documentation
         $params = [
             'peer' => $peer,
-            'file' => [
-                '_' => 'RemoteUrl',
-                'url' => $voiceUrl,
-            ],
+            'file' => $voiceUrl,
         ];
 
         if ($caption) {
             $params['caption'] = $caption;
+        }
+
+        if ($parseMode) {
+            $params['parse_mode'] = $parseMode;
         }
 
         $response = $this->request($port, $endpoint, $params, 'POST');
@@ -311,39 +318,41 @@ class TasApiService
         return $response;
     }
 
-    /**
-     * Отправить файл/документ
-     */
-    public function sendDocument(
+    public function sendPhoto(
         int $port,
         string $peer,
-        string $fileUrl,
+        string $photoUrl,
         ?string $caption = null,
         ?string $parseMode = null,
         ?string $sessionName = null
     ): array {
         $endpoint = $sessionName
-            ? "/api/{$sessionName}/sendDocument"
-            : "/api/sendDocument";
+            ? "/api/{$sessionName}/sendPhoto"
+            : "/api/sendPhoto";
 
-        // Format file as RemoteUrl object per TAS documentation
         $params = [
             'peer' => $peer,
-            'file' => [
-                '_' => 'RemoteUrl',
-                'url' => $fileUrl,
-            ],
+            'file' => $photoUrl,
         ];
 
         if ($caption) {
             $params['caption'] = $caption;
         }
+
         if ($parseMode) {
-            $params['parseMode'] = $parseMode;
+            $params['parse_mode'] = $parseMode;
         }
 
         $response = $this->request($port, $endpoint, $params, 'POST');
 
+        Log::info('Photo sent', [
+            'port' => $port,
+            'peer' => $peer,
+            'message_id' => $response['response']['id'] ?? null,
+        ]);
+
         return $response;
     }
+
+
 }

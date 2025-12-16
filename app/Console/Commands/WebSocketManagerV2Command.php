@@ -21,7 +21,6 @@ class WebSocketManagerV2Command extends Command
     protected $signature = 'websocket:manager-v2 {--debug : Enable debug output}';
     protected $description = 'Manage WebSocket connections V2 (improved version)';
 
-    // Connection tracking
     private array $connections = [];
     private array $activeFibers = [];
 
@@ -47,8 +46,6 @@ class WebSocketManagerV2Command extends Command
 
     public function handle(WebSocketServiceV2 $ws): int
     {
-        $this->info('🚀 WebSocket Manager V2 starting...');
-
         EventLoop::setErrorHandler(function (\Throwable $e) {
             $this->error("EventLoop error: {$e->getMessage()}");
             Log::error('EventLoop uncaught error', [
@@ -75,13 +72,11 @@ class WebSocketManagerV2Command extends Command
                 delay(self::SYNC_INTERVAL);
             }
 
-            $this->info('Main loop stopped, cleaning up...');
             $this->cleanup();
         });
 
         EventLoop::run();
 
-        $this->info('✅ WebSocket Manager V2 stopped gracefully');
         return 0;
     }
 
@@ -92,18 +87,13 @@ class WebSocketManagerV2Command extends Command
             pcntl_async_signals(true);
 
             pcntl_signal(SIGTERM, function () {
-                $this->warn('⚠️  Received SIGTERM, shutting down gracefully...');
                 $this->shouldStop = true;
             });
 
             pcntl_signal(SIGINT, function () {
-                $this->warn('⚠️  Received SIGINT, shutting down gracefully...');
                 $this->shouldStop = true;
             });
 
-            $this->info('✅ Graceful shutdown handlers registered');
-        } else {
-            $this->warn('⚠️  pcntl extension not available, graceful shutdown disabled');
         }
     }
 
@@ -121,7 +111,6 @@ class WebSocketManagerV2Command extends Command
 
             if (Cache::has("reconnect_ws_{$account->id}")) {
                 Cache::forget("reconnect_ws_{$account->id}");
-                $this->info("🔄 Reconnect signal for account {$account->id}");
                 $this->stopConnection($key);
                 delay(0.5);
             }
@@ -176,12 +165,6 @@ class WebSocketManagerV2Command extends Command
                     $handshake = new WebsocketHandshake($wsUrl);
                     $connection = connect($handshake);
 
-                    $this->info("✅ Connected: {$sessionName} (fiber: {$fiberId})");
-                    Log::info('WebSocket connected', [
-                        'session' => $sessionName,
-                        'fiber_id' => $fiberId,
-                    ]);
-
                     $reconnectDelay = self::INITIAL_RECONNECT_DELAY;
 
                     $pingLoopId = $this->setupPingLoop($connection, $sessionName);
@@ -190,7 +173,6 @@ class WebSocketManagerV2Command extends Command
 
                     while ($message = $connection->receive()) {
                         if ($this->shouldStop || !isset($this->connections[$key])) {
-                            $this->info("Stopping listener for {$sessionName}");
                             $connection->close();
                             break;
                         }
@@ -200,7 +182,7 @@ class WebSocketManagerV2Command extends Command
 
                     if ($connection->isClosed()) {
                         $reason = $connection->getCloseInfo()?->getReason() ?? 'unknown';
-                        $this->warn("Connection closed: {$sessionName} - {$reason}");
+                        Log::error("Couldn't connect to websocket: {$reason}");
                     }
 
                 } catch (\Throwable $e) {
@@ -209,13 +191,6 @@ class WebSocketManagerV2Command extends Command
                     }
 
                     $this->totalErrors++;
-                    $this->warn("WebSocket error for {$sessionName}: {$e->getMessage()}");
-
-                    Log::warning('WebSocket error', [
-                        'session' => $sessionName,
-                        'error' => $e->getMessage(),
-                        'fiber_id' => $fiberId,
-                    ]);
 
                     if ($pingLoopId) {
                         EventLoop::cancel($pingLoopId);
@@ -301,21 +276,8 @@ class WebSocketManagerV2Command extends Command
             $update = $data['result']['update'] ?? [];
             $message = $update['message'] ?? [];
 
-            Log::debug('WebSocket event received', [
-                'fiber_id' => substr($fiberId, 0, 12),
-                'event_type' => $update['_'] ?? 'unknown',
-                'from_id' => $message['from_id'] ?? null,
-                'peer_id' => $message['peer_id'] ?? null,
-                'out' => $message['out'] ?? false,
-                'message_text' => substr($message['message'] ?? '', 0, 50),
-            ]);
-
             if (!$ws->isPrivateMessage($data)) {
-                Log::debug('Event filtered out (not private message)', [
-                    'event_type' => $update['_'] ?? 'unknown',
-                    'from_id' => $message['from_id'] ?? null,
-                    'peer_id' => $message['peer_id'] ?? null,
-                ]);
+
                 return;
             }
 
@@ -375,32 +337,22 @@ class WebSocketManagerV2Command extends Command
             }
         })->ignore();
     }
-    /**
-     * Stop a connection
-     */
+
     private function stopConnection(string $key): void
     {
         if (!isset($this->connections[$key])) {
             return;
         }
 
-        $this->info("🛑 Stopping connection: {$key}");
-
         unset($this->connections[$key]);
     }
 
-    /**
-     * Cleanup fiber resources
-     */
+
     private function cleanupFiber(string $fiberId, string $key): void
     {
         unset($this->activeFibers[$fiberId]);
         unset($this->connections[$key]);
 
-        Log::info('Fiber terminated', [
-            'fiber_id' => $fiberId,
-            'key' => $key,
-        ]);
     }
 
 
@@ -437,29 +389,20 @@ class WebSocketManagerV2Command extends Command
         }
     }
 
-    /**
-     * Cleanup all connections on shutdown
-     */
     private function cleanup(): void
     {
-        $this->info('🧹 Cleaning up all connections...');
 
         foreach (array_keys($this->connections) as $key) {
             $this->stopConnection($key);
         }
 
-        // Wait for fibers to finish
         $maxWait = 5;
         $waited = 0;
         while (count($this->activeFibers) > 0 && $waited < $maxWait) {
-            $this->info("Waiting for " . count($this->activeFibers) . " fibers to finish...");
             delay(0.5);
             $waited += 0.5;
         }
 
-        if (count($this->activeFibers) > 0) {
-            $this->warn("⚠️  {count($this->activeFibers)} fibers still active after {$maxWait}s");
-        }
 
         $this->logStats(true);
         Cache::forget('ws_v2_active_accounts');
@@ -493,13 +436,8 @@ class WebSocketManagerV2Command extends Command
             'memory_mb' => round(memory_get_usage(true) / 1024 / 1024, 2),
         ];
 
-        if ($force || $this->option('debug')) {
-            $this->info('📊 Stats: ' . json_encode($stats, JSON_PRETTY_PRINT));
-        }
-
         Log::info('WebSocket Manager V2 stats', $stats);
 
-        // Detailed fiber stats in debug mode
         if ($this->option('debug')) {
             foreach ($this->activeFibers as $fiberId => $info) {
                 $uptime = time() - $info['started_at'];
