@@ -327,10 +327,6 @@ class WebSocketManagerV2Command extends Command
 
             if ($messageId && $this->isDuplicateMessage($dedupKey)) {
                 $this->totalDuplicatesSkipped++;
-                Log::debug('Duplicate message skipped', [
-                    'message_id' => $messageId,
-                    'session' => $sessionName,
-                ]);
                 return;
             }
 
@@ -370,10 +366,7 @@ class WebSocketManagerV2Command extends Command
                 $this->totalWebhooksSent++;
             } catch (\Throwable $e) {
                 $this->totalErrors++;
-                Log::error('Webhook delivery failed', [
-                    'url' => $webhookUrl,
-                    'error' => $e->getMessage(),
-                ]);
+
             } finally {
                 if (isset($this->connections[$key])) {
                     $this->connections[$key]['pending_webhooks']--;
