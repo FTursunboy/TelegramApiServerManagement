@@ -225,6 +225,7 @@ class TasApiService
         int $port,
         string $peer,
         int $limit = 10,
+
         int $offset = 0
     ): array {
         return $this->request($port, '/api/messages.getHistory', [
@@ -243,7 +244,7 @@ class TasApiService
             'id' => $id,
         ]);
     }
-    
+
     public function sendDocument(
         int $port,
         string $peer,
