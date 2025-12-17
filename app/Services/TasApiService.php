@@ -254,17 +254,25 @@ class TasApiService
         ?string $sessionName = null
     ): array {
         $endpoint = $sessionName
-            ? "/api/{$sessionName}/sendDocument"
-            : "/api/sendDocument";
+            ? "/api/{$sessionName}/messages.sendMedia"  // Используем sendMedia вместо sendDocument
+            : "/api/messages.sendMedia";
 
-        // Просто передаем URL как строку
         $params = [
             'peer' => $peer,
-            'file' => $fileUrl,
+            'media' => [
+                '_' => 'inputMediaUploadedDocument',
+                'file' => $fileUrl,
+                'attributes' => [
+                    [
+                        '_' => 'documentAttributeFilename',
+                        'file_name' => basename($fileUrl)
+                    ]
+                ]
+            ],
         ];
 
         if ($caption) {
-            $params['caption'] = $caption;
+            $params['message'] = $caption;
         }
 
         if ($parseMode) {
@@ -282,7 +290,6 @@ class TasApiService
 
         return $response;
     }
-
     public function sendVoice(
         int $port,
         string $peer,
