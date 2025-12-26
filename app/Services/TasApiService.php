@@ -298,31 +298,35 @@ class TasApiService
         ?string $parseMode = null,
         ?string $sessionName = null
     ): array {
+        // Используем прямой вызов метода sendVoice MadelineProto через TAS API
         $endpoint = $sessionName
-            ? "/api/{$sessionName}/messages.sendMedia"
-            : "/api/messages.sendMedia";
+            ? "/api/{$sessionName}/sendVoice"
+            : "/api/sendVoice";
 
+        // MadelineProto требует объект RemoteUrl, а не просто строку
+        // TAS API преобразует эту структуру в new RemoteUrl($url)
         $params = [
             'peer' => $peer,
-            'media' => [
-                '_' => 'inputMediaUploadedDocument',
-                'file' => $voiceUrl,
-                'attributes' => [
-                    [
-                        '_' => 'documentAttributeAudio',
-                        'voice' => true,
-                    ]
-                ]
+            'file' => [
+                '_' => 'remoteUrl',
+                'url' => $voiceUrl
             ],
         ];
 
         if ($caption) {
-            $params['message'] = $caption;
+            $params['caption'] = $caption;
         }
 
         if ($parseMode) {
             $params['parse_mode'] = $parseMode;
         }
+
+        Log::info('Sending voice message', [
+            'port' => $port,
+            'peer' => $peer,
+            'voice_url' => $voiceUrl,
+            'method' => 'sendVoice with RemoteUrl',
+        ]);
 
         $response = $this->request($port, $endpoint, $params, 'POST');
 
