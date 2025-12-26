@@ -299,16 +299,25 @@ class TasApiService
         ?string $sessionName = null
     ): array {
         $endpoint = $sessionName
-            ? "/api/{$sessionName}/sendVoice"
-            : "/api/sendVoice";
+            ? "/api/{$sessionName}/messages.sendMedia"
+            : "/api/messages.sendMedia";
 
         $params = [
             'peer' => $peer,
-            'file' => $voiceUrl,
+            'media' => [
+                '_' => 'inputMediaUploadedDocument',
+                'file' => $voiceUrl,
+                'attributes' => [
+                    [
+                        '_' => 'documentAttributeAudio',
+                        'voice' => true,
+                    ]
+                ]
+            ],
         ];
 
         if ($caption) {
-            $params['caption'] = $caption;
+            $params['message'] = $caption;
         }
 
         if ($parseMode) {

@@ -175,6 +175,13 @@ class WebSocketServiceV2
             }
         }
 
+        // Обработка геолокации
+        if (isset($media['geo']) && ($media['_'] ?? '') === 'messageMediaGeo') {
+            $geo = $media['geo'];
+            $info['latitude'] = $geo['lat'] ?? null;
+            $info['longitude'] = $geo['long'] ?? null;
+        }
+
         return $info;
     }
     public function downloadAndAttachMedia(array &$messageData): void
