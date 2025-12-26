@@ -182,6 +182,15 @@ class WebSocketServiceV2
             $info['longitude'] = $geo['long'] ?? null;
         }
 
+        // Обработка контакта
+        if (($media['_'] ?? '') === 'messageMediaContact') {
+            $info['phone_number'] = $media['phone_number'] ?? null;
+            $info['first_name'] = $media['first_name'] ?? null;
+            $info['last_name'] = $media['last_name'] ?? null;
+            $info['user_id'] = $media['user_id'] ?? null;
+            $info['vcard'] = $media['vcard'] ?? null;
+        }
+
         return $info;
     }
     public function downloadAndAttachMedia(array &$messageData): void
