@@ -298,23 +298,42 @@ class TasApiService
         ?string $parseMode = null,
         ?string $sessionName = null
     ): array {
-        // Используем прямой вызов метода sendVoice MadelineProto через TAS API
+        // Используем тот же подход что и sendDocument - через messages.sendMedia
+        // TAS API преобразует строку URL в RemoteUrl автоматически
         $endpoint = $sessionName
-            ? "/api/{$sessionName}/sendVoice"
-            : "/api/sendVoice";
+            ? "/api/{$sessionName}/messages.sendMedia"
+            : "/api/messages.sendMedia";
 
-        // MadelineProto требует объект RemoteUrl, а не просто строку
-        // TAS API преобразует эту структуру в new RemoteUrl($url)
+        // Определяем MIME-type из расширения файла
+        $extension = strtolower(pathinfo(parse_url($voiceUrl, PHP_URL_PATH), PATHINFO_EXTENSION));
+        $mimeTypes = [
+            'ogg' => 'audio/ogg',
+            'oga' => 'audio/ogg',
+            'opus' => 'audio/ogg',
+            'm4a' => 'audio/mp4',
+            'aac' => 'audio/aac',
+            'mp3' => 'audio/mpeg',
+            'wav' => 'audio/wav',
+        ];
+        $mimeType = $mimeTypes[$extension] ?? 'audio/ogg';
+
         $params = [
             'peer' => $peer,
-            'file' => [
-                '_' => 'remoteUrl',
-                'url' => $voiceUrl
+            'media' => [
+                '_' => 'inputMediaUploadedDocument',
+                'file' => $voiceUrl,  // TAS API преобразует строку в RemoteUrl
+                'mime_type' => $mimeType,
+                'attributes' => [
+                    [
+                        '_' => 'documentAttributeAudio',
+                        'voice' => true,
+                    ],
+                ],
             ],
         ];
 
         if ($caption) {
-            $params['caption'] = $caption;
+            $params['message'] = $caption;
         }
 
         if ($parseMode) {
@@ -325,7 +344,9 @@ class TasApiService
             'port' => $port,
             'peer' => $peer,
             'voice_url' => $voiceUrl,
-            'method' => 'sendVoice with RemoteUrl',
+            'mime_type' => $mimeType,
+            'extension' => $extension,
+            'method' => 'messages.sendMedia with voice attribute',
         ]);
 
         $response = $this->request($port, $endpoint, $params, 'POST');
