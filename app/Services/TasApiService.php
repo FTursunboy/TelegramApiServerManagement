@@ -298,31 +298,25 @@ class TasApiService
         ?string $parseMode = null,
         ?string $sessionName = null
     ): array {
+        // Конвертируем аудио файл в OGG формат для голосовых сообщений
+        $convertedUrl = $this->convertAudioToOgg($voiceUrl);
+        
+        if (!$convertedUrl) {
+            throw new TasApiException("Failed to convert audio file to OGG format");
+        }
+
         // Используем тот же подход что и sendDocument - через messages.sendMedia
         // TAS API преобразует строку URL в RemoteUrl автоматически
         $endpoint = $sessionName
             ? "/api/{$sessionName}/messages.sendMedia"
             : "/api/messages.sendMedia";
 
-        // Определяем MIME-type из расширения файла
-        $extension = strtolower(pathinfo(parse_url($voiceUrl, PHP_URL_PATH), PATHINFO_EXTENSION));
-        $mimeTypes = [
-            'ogg' => 'audio/ogg',
-            'oga' => 'audio/ogg',
-            'opus' => 'audio/ogg',
-            'm4a' => 'audio/mp4',
-            'aac' => 'audio/aac',
-            'mp3' => 'audio/mpeg',
-            'wav' => 'audio/wav',
-        ];
-        $mimeType = $mimeTypes[$extension] ?? 'audio/ogg';
-
         $params = [
             'peer' => $peer,
             'media' => [
                 '_' => 'inputMediaUploadedDocument',
-                'file' => $voiceUrl,  // TAS API преобразует строку в RemoteUrl
-                'mime_type' => $mimeType,
+                'file' => $convertedUrl,  // TAS API преобразует строку в RemoteUrl
+                'mime_type' => 'audio/ogg',
                 'attributes' => [
                     [
                         '_' => 'documentAttributeAudio',
@@ -343,9 +337,8 @@ class TasApiService
         Log::info('Sending voice message', [
             'port' => $port,
             'peer' => $peer,
-            'voice_url' => $voiceUrl,
-            'mime_type' => $mimeType,
-            'extension' => $extension,
+            'original_url' => $voiceUrl,
+            'converted_url' => $convertedUrl,
             'method' => 'messages.sendMedia with voice attribute',
         ]);
 
@@ -358,6 +351,95 @@ class TasApiService
         ]);
 
         return $response;
+    }
+
+    /**
+     * Конвертирует аудио файл в OGG формат через внешний сервис
+     */
+    private function convertAudioToOgg(string $fileUrl): ?string
+    {
+        try {
+            $converterUrl = config('services.audio_converter.url');
+            $targetFormat = config('services.audio_converter.target_format', 'ogg');
+
+            if (!$converterUrl) {
+                Log::warning('Audio converter URL not configured, using original file');
+                return $fileUrl;
+            }
+
+            Log::info('Converting audio file', [
+                'original_url' => $fileUrl,
+                'target_format' => $targetFormat,
+            ]);
+
+            // Скачиваем файл
+            $fileContent = file_get_contents($fileUrl);
+            if ($fileContent === false) {
+                Log::error('Failed to download audio file', ['url' => $fileUrl]);
+                return null;
+            }
+
+            // Создаём временный файл
+            $tempFile = tempnam(sys_get_temp_dir(), 'voice_');
+            file_put_contents($tempFile, $fileContent);
+
+            try {
+                // Открываем файл для чтения
+                $fileStream = fopen($tempFile, 'r');
+                if ($fileStream === false) {
+                    Log::error('Failed to open temporary file', ['path' => $tempFile]);
+                    return null;
+                }
+
+                try {
+                    // Отправляем на конвертацию
+                    $convertResponse = Http::timeout(120)
+                        ->attach('file', $fileStream, basename($fileUrl))
+                        ->attach('target_format', $targetFormat)
+                        ->post($converterUrl);
+                } finally {
+                    if (is_resource($fileStream)) {
+                        fclose($fileStream);
+                    }
+                }
+
+                if (!$convertResponse->successful()) {
+                    Log::error('Audio conversion failed', [
+                        'status' => $convertResponse->status(),
+                        'body' => $convertResponse->body(),
+                    ]);
+                    return null;
+                }
+
+                $convertData = $convertResponse->json();
+                $downloadUrl = $convertData['download_url'] ?? null;
+
+                if (($convertData['status'] ?? '') !== 'ok' || !$downloadUrl) {
+                    Log::error('Invalid conversion response', ['response' => $convertData]);
+                    return null;
+                }
+
+                Log::info('Audio converted successfully', [
+                    'original_url' => $fileUrl,
+                    'converted_url' => $downloadUrl,
+                ]);
+
+                return $downloadUrl;
+
+            } finally {
+                // Удаляем временный файл
+                if (file_exists($tempFile)) {
+                    unlink($tempFile);
+                }
+            }
+
+        } catch (\Throwable $e) {
+            Log::error('Audio conversion exception', [
+                'error' => $e->getMessage(),
+                'url' => $fileUrl,
+            ]);
+            return null;
+        }
     }
 
     public function sendPhoto(

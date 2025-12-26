@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'audio_converter' => [
+        'url' => env('AUDIO_CONVERTER_URL', 'https://api.converter.example.com/convert'),
+        'target_format' => env('AUDIO_TARGET_FORMAT', 'ogg'),
+    ],
+
 ];
