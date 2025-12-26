@@ -554,7 +554,6 @@ class DockerService
             $response = $this->getClient()
                 ->timeout(300)
                 ->post("/v1.43/images/create?fromImage={$image}");
-
             if ($response->successful()) {
                 Log::info('Image pulled successfully', ['image' => $image]);
                 return true;
@@ -597,29 +596,64 @@ class DockerService
     private function ensureCodeExists(string $codePath): void
     {
         if (is_dir($codePath) && file_exists("{$codePath}/server.php")) {
+            Log::debug('TAS code already exists', ['path' => $codePath]);
             return;
         }
 
         Log::info('TAS code not found, cloning...', ['path' => $codePath]);
 
+        // Ensure parent directory exists
         $parentDir = dirname($codePath);
         if (!is_dir($parentDir)) {
-            mkdir($parentDir, 0755, true);
+            if (!mkdir($parentDir, 0755, true)) {
+                throw new ContainerException("Failed to create directory: {$parentDir}");
+            }
         }
 
+        // Remove any partial/corrupted clone attempts
+        if (file_exists($codePath)) {
+            Log::warning('Removing corrupted clone attempt', ['path' => $codePath]);
+            exec("rm -rf " . escapeshellarg($codePath) . " 2>&1", $cleanupOutput, $cleanupCode);
+            if ($cleanupCode !== 0) {
+                Log::warning('Failed to cleanup directory', ['output' => implode("\n", $cleanupOutput)]);
+            }
+        }
+
+        // Use shallow clone to reduce memory usage and speed up the process
         $command = sprintf(
-            'git clone https://github.com/xtrime-ru/TelegramApiServer.git %s 2>&1',
+            'git clone --depth 1 --single-branch --branch master https://github.com/xtrime-ru/TelegramApiServer.git %s 2>&1',
             escapeshellarg($codePath)
         );
+
+        Log::debug('Executing git clone', ['command' => $command]);
 
         exec($command, $output, $returnCode);
 
         if ($returnCode !== 0) {
-            throw new ContainerException("Failed to clone TAS code: " . implode("\n", $output));
+            $error = implode("\n", $output);
+            Log::error('Failed to clone TAS code', [
+                'path' => $codePath,
+                'command' => $command,
+                'return_code' => $returnCode,
+                'output' => $error
+            ]);
+
+            throw new ContainerException("Failed to clone TAS code: {$error}");
         }
 
+        // Verify the clone was successful
+        if (!file_exists("{$codePath}/server.php")) {
+            throw new ContainerException("Clone completed but server.php not found in {$codePath}");
+        }
+
+        // Copy .env.docker if needed
         if (!file_exists("{$codePath}/.env.docker")) {
-            copy("{$codePath}/.env.docker.example", "{$codePath}/.env.docker");
+            if (file_exists("{$codePath}/.env.docker.example")) {
+                copy("{$codePath}/.env.docker.example", "{$codePath}/.env.docker");
+                Log::debug('Copied .env.docker.example to .env.docker');
+            } else {
+                Log::warning('.env.docker.example not found, skipping .env.docker creation');
+            }
         }
 
         Log::info('TAS code cloned successfully', ['path' => $codePath]);

@@ -223,10 +223,16 @@ class TasApiService
         ?string $caption = null,
         ?string $parseMode = null
     ): array {
+        // Определяем тип файла: URL или локальный путь
+        $isUrl = filter_var($photoPath, FILTER_VALIDATE_URL) !== false;
+        
         $params = [
             'peer' => $peer,
-            'file' => [
-                '_' => 'LocalUrl',
+            'file' => $isUrl ? [
+                '_' => 'RemoteUrl',
+                'url' => $photoPath,
+            ] : [
+                '_' => 'LocalFile',
                 'file' => $photoPath,
             ],
         ];
@@ -280,10 +286,16 @@ class TasApiService
             ? "/api/{$sessionName}/sendVoice"
             : "/api/sendVoice";
 
+        // Определяем тип файла: URL или локальный путь
+        $isUrl = filter_var($voicePath, FILTER_VALIDATE_URL) !== false;
+        
         $params = [
             'peer' => $peer,
-            'file' => [
-                '_' => 'LocalUrl',
+            'file' => $isUrl ? [
+                '_' => 'RemoteUrl',
+                'url' => $voicePath,
+            ] : [
+                '_' => 'LocalFile',
                 'file' => $voicePath,
             ],
         ];
@@ -318,10 +330,16 @@ class TasApiService
             ? "/api/{$sessionName}/sendDocument"
             : "/api/sendDocument";
 
+        // Определяем тип файла: URL или локальный путь
+        $isUrl = filter_var($filePath, FILTER_VALIDATE_URL) !== false;
+        
         $params = [
             'peer' => $peer,
-            'file' => [
-                '_' => 'LocalUrl',
+            'file' => $isUrl ? [
+                '_' => 'RemoteUrl',
+                'url' => $filePath,
+            ] : [
+                '_' => 'LocalFile',
                 'file' => $filePath,
             ],
         ];

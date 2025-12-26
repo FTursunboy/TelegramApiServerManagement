@@ -43,6 +43,11 @@ class TelegramAccountService
 
                 $this->configureSession($account);
 
+                // Настроить webhook (если указан)
+                if ($account->webhook_url) {
+                    $this->configureWebhook($account);
+                }
+
                 ListenToWebSocket::dispatch($account->id);
 
                 return $this->initiateAuth($account);
@@ -275,9 +280,19 @@ class TelegramAccountService
     private function configureWebhook(TelegramAccount $account): void
     {
         try {
+            // Создаём proxy URL, который будет обогащать данные и перенаправлять на конечный webhook
+            $appUrl = rtrim(config('app.url'), '/');
+            $proxyUrl = $appUrl . '/api/webhook/proxy?target_url=' . urlencode($account->webhook_url);
+            
+            Log::info('Setting webhook with proxy', [
+                'account_id' => $account->id,
+                'proxy_url' => $proxyUrl,
+                'target_url' => $account->webhook_url,
+            ]);
+            
             $this->tas->setWebhook(
                 $account->container_port,
-                $account->webhook_url
+                $proxyUrl
             );
         } catch (\Exception $e) {
             Log::warning('Failed to set webhook', [

@@ -1,9 +1,12 @@
 <?php
 
 use App\Http\Controllers\API\TelegramAccountController;
+use App\Http\Controllers\API\WebhookProxyController;
 use Illuminate\Support\Facades\Route;
 
-// Simple microservice API - only essential endpoints
+// Webhook proxy endpoint (без middleware, так как вызывается из TAS)
+Route::post('webhook/proxy', [WebhookProxyController::class, 'handle']);
+
 Route::prefix('v1')->middleware('api.key')->group(function () {
 
     Route::post('login/start', [TelegramAccountController::class, 'startLogin']);

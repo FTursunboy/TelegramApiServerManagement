@@ -64,10 +64,11 @@ class ListenToWebSocket implements ShouldQueue
                 $lastCheck = time();
 
                 while (true) {
+                    // Проверяем статус контейнера каждые 30 секунд
                     if (time() - $lastCheck > 30) {
                         $account->refresh();
                         $lastCheck = time();
-                        
+
                         if (!$account->hasContainer()) {
                             Log::info('Container stopped, closing WebSocket', [
                                 'session_name' => $account->session_name,
@@ -79,28 +80,37 @@ class ListenToWebSocket implements ShouldQueue
 
                     try {
                         $message = $client->receive();
-                        
+
                         if ($message === null || $message === '') {
-                            usleep(100000);
+                            usleep(100000); // 100ms
                             continue;
                         }
 
-                        $update = json_decode($message, true);
+                        // Декодируем JSON
+                        $data = json_decode($message, true);
 
-                        if (!$update) {
+                        if (!$data || json_last_error() !== JSON_ERROR_NONE) {
+                            Log::warning('Invalid JSON received', [
+                                'session_name' => $account->session_name,
+                                'message' => substr($message, 0, 200),
+                                'error' => json_last_error_msg(),
+                            ]);
                             continue;
                         }
 
-                        if ($ws->isPrivateMessage($update)) {
-                            $data = $ws->extractMessageData($update);
+                        // Проверяем, является ли это личным сообщением
+                        if ($ws->isPrivateMessage($data)) {
+                            $messageData = $ws->extractMessageData($data);
 
                             Log::info('Private message received', [
                                 'session_name' => $account->session_name,
-                                'from_id' => $data['from_id'],
-                                'message_preview' => substr($data['message'] ?? '', 0, 50),
+                                'from_id' => $messageData['from_id'],
+                                'peer_id' => $messageData['peer_id'],
+                                'message_preview' => substr($messageData['message'] ?? '', 0, 50),
                             ]);
 
-                            $ws->sendToWebhook($account->webhook_url, $data);
+                            // Отправляем на webhook
+                            $ws->sendToWebhook($account->webhook_url, $messageData);
                         }
 
                     } catch (ConnectionException $e) {
@@ -108,28 +118,37 @@ class ListenToWebSocket implements ShouldQueue
                             'session_name' => $account->session_name,
                             'error' => $e->getMessage(),
                         ]);
-                        break;
+                        break; // Выходим из внутреннего цикла для переподключения
                     } catch (\Exception $e) {
+                        // Игнорируем таймауты чтения
                         if (strpos($e->getMessage(), 'timeout') !== false) {
                             Log::debug('WebSocket read timeout, continuing...', [
                                 'session_name' => $account->session_name,
                             ]);
                             continue;
                         }
-                        throw $e;
+
+                        // Логируем другие ошибки, но продолжаем работу
+                        Log::error('WebSocket message processing error', [
+                            'session_name' => $account->session_name,
+                            'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString(),
+                        ]);
+                        continue;
                     }
                 }
 
             } catch (\Exception $e) {
-                Log::error('WebSocket error', [
+                Log::error('WebSocket connection error', [
                     'session_name' => $account->session_name,
                     'error' => $e->getMessage(),
+                    'will_reconnect_in' => $reconnectDelay,
                 ]);
 
+                // Ждем перед переподключением
                 sleep($reconnectDelay);
                 $reconnectDelay = min($reconnectDelay * 2, $maxReconnectDelay);
             }
         }
     }
 }
-
